@@ -5,7 +5,7 @@ import { Post } from "../types/post.js";
 const db = sql("posts.db");
 
 export const getPosts = () => {
-  return db.prepare("SELECT * FROM posts").all();
+  return db.prepare("SELECT * FROM posts").all() as Post[];
 };
 
 export const getPost = (postId: number) => {
@@ -15,7 +15,7 @@ export const getPost = (postId: number) => {
     throw new ApiError(404, "Post not found");
   }
 
-  return post;
+  return post as Post;
 };
 
 export const savePost = (title: string, content: string) => {
@@ -43,11 +43,7 @@ export const savePost = (title: string, content: string) => {
 export const deletePost = (postId: number) => {
   const result = db.prepare("DELETE FROM posts WHERE id = ?").run(postId);
 
-  if (!result.changes) {
-    throw new ApiError(404, "Post not found");
-  }
-
-  return true;
+  return result.changes === 1;
 };
 
 export const updatePost = (
@@ -62,9 +58,5 @@ export const updatePost = (
 
   const result = stmt.run({ ...data, id: postId });
 
-  if (!result.changes) {
-    throw new ApiError(404, "Post not found");
-  }
-
-  return true;
+  return result.changes === 1;
 };

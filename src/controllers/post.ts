@@ -7,6 +7,7 @@ import {
   updatePost,
 } from "../lib/post.js";
 import { Post } from "../types/post.js";
+import ApiError from "../lib/apiError.js";
 
 const postController = {
   list: (_: Request, res: Response, next: NextFunction) => {
@@ -71,7 +72,11 @@ const postController = {
     next: NextFunction
   ) => {
     try {
-      deletePost(Number(req.params.postId));
+      const postIsDeleted = deletePost(Number(req.params.postId));
+
+      if (!postIsDeleted) {
+        throw new ApiError(404, "Post not found");
+      }
 
       res.send({
         status: 200,
@@ -88,7 +93,11 @@ const postController = {
     next: NextFunction
   ) => {
     try {
-      updatePost(Number(req.params.postId), req.body);
+      const postIsEditied = updatePost(Number(req.params.postId), req.body);
+
+      if (!postIsEditied) {
+        throw new ApiError(404, "Post not found");
+      }
 
       res.send({
         status: 200,
