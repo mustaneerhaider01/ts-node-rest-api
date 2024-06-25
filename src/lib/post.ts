@@ -1,0 +1,70 @@
+import sql from "better-sqlite3";
+import ApiError from "./apiError.js";
+import { Post } from "../types/post.js";
+
+const db = sql("posts.db");
+
+export const getPosts = () => {
+  return db.prepare("SELECT * FROM posts").all();
+};
+
+export const getPost = (postId: number) => {
+  const post = db.prepare("SELECT * FROM posts WHERE id = ?").get(postId);
+
+  if (!post) {
+    throw new ApiError(404, "Post not found");
+  }
+
+  return post;
+};
+
+export const savePost = (title: string, content: string) => {
+  const postData = {
+    title,
+    content,
+    createdAt: new Date().toISOString(),
+  };
+
+  const stmt = db.prepare(`
+      INSERT INTO posts
+        (title, content, createdAt)
+      VALUES (
+        @title,
+        @content,
+        @createdAt
+      )
+    `);
+
+  const result = stmt.run(postData);
+
+  return result.lastInsertRowid;
+};
+
+export const deletePost = (postId: number) => {
+  const result = db.prepare("DELETE FROM posts WHERE id = ?").run(postId);
+
+  if (!result.changes) {
+    throw new ApiError(404, "Post not found");
+  }
+
+  return true;
+};
+
+export const updatePost = (
+  postId: number,
+  data: Pick<Post, "title" | "content">
+) => {
+  const stmt = db.prepare(`
+      UPDATE posts
+      SET title = @title, content = @content
+      WHERE id = @id
+    `);
+
+  const result = stmt.run({ ...data, id: postId });
+
+  if (!result.changes) {
+    throw new ApiError(404, "Post not found");
+  }
+
+  return true;
+};
