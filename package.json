@@ -7,7 +7,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start:dev": "tsc --watch & nodemon --env-file=.env ./dist/app.js",
-    "start": "node --env-file=.env ./dist/app.js"
+    "start": "tsc && node --env-file=.env ./dist/app.js"
   },
   "keywords": [],
   "author": "",
