@@ -16,6 +16,12 @@ This project now includes Redis caching for posts data and JWT session managemen
 - **Token Validation**: JWT tokens validated against Redis session data
 - **Session Refresh**: Ability to refresh session expiration
 
+### 3. Rate Limiting
+
+- **Request Tracking**: Each user’s requests tracked in Redis with key `rate:{ip}`
+- **Limit Enforcement**: Request count is incremented per API call and validated against a defined threshold (e.g., 100 requests per 15 minutes)
+- **Automatic Reset**: Keys expire after the specified time window (TTL), automatically resetting the request count
+
 ## Environment Variables Required
 
 Create a `.env` file with the following variables:
