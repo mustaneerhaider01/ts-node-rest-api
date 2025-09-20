@@ -8,11 +8,20 @@ import {
 } from "../lib/post.js";
 import { Post } from "../types/post.js";
 import ApiError from "../lib/apiError.js";
+import redisService from "../lib/redis.js";
 
 const postController = {
-  list: (_: Request, res: Response, next: NextFunction) => {
+  list: async (_: Request, res: Response, next: NextFunction) => {
     try {
-      const posts = getPosts();
+      // Try to get from cache first
+      let posts = await redisService.getPosts();
+
+      if (!posts) {
+        // Cache miss - get from database
+        posts = getPosts();
+        // Cache the result
+        await redisService.setPosts(posts);
+      }
 
       res.send({
         status: 200,
@@ -26,13 +35,24 @@ const postController = {
       next(err);
     }
   },
-  get: (
+
+  get: async (
     req: Request<{ postId: string }>,
     res: Response,
     next: NextFunction
   ) => {
     try {
-      const post = getPost(Number(req.params.postId));
+      const postId = Number(req.params.postId);
+
+      // Try to get from cache first
+      let post = await redisService.getPost(postId);
+
+      if (!post) {
+        // Cache miss - get from database
+        post = getPost(postId);
+        // Cache the result
+        await redisService.setPost(postId, post);
+      }
 
       res.send({
         status: 200,
@@ -46,13 +66,17 @@ const postController = {
       next(err);
     }
   },
-  create: (
+
+  create: async (
     req: Request<{}, {}, Pick<Post, "title" | "content">>,
     res: Response,
     next: NextFunction
   ) => {
     try {
       const createdPostId = savePost(req.body.title, req.body.content);
+
+      // Invalidate cache after creating a new post
+      await redisService.invalidatePostCache();
 
       res.send({
         status: 200,
@@ -66,17 +90,22 @@ const postController = {
       next(err);
     }
   },
-  remove: (
+
+  remove: async (
     req: Request<{ postId: string }>,
     res: Response,
     next: NextFunction
   ) => {
     try {
-      const postIsDeleted = deletePost(Number(req.params.postId));
+      const postId = Number(req.params.postId);
+      const postIsDeleted = deletePost(postId);
 
       if (!postIsDeleted) {
         throw new ApiError(404, "Post not found");
       }
+
+      // Invalidate cache after deleting a post
+      await redisService.invalidatePostCache(postId);
 
       res.send({
         status: 200,
@@ -87,17 +116,22 @@ const postController = {
       next(err);
     }
   },
-  edit: (
+
+  edit: async (
     req: Request<{ postId: string }, {}, Pick<Post, "title" | "content">>,
     res: Response,
     next: NextFunction
   ) => {
     try {
-      const postIsEditied = updatePost(Number(req.params.postId), req.body);
+      const postId = Number(req.params.postId);
+      const postIsEditied = updatePost(postId, req.body);
 
       if (!postIsEditied) {
         throw new ApiError(404, "Post not found");
       }
+
+      // Invalidate cache after editing a post
+      await redisService.invalidatePostCache(postId);
 
       res.send({
         status: 200,

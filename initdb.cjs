@@ -1,4 +1,6 @@
 const sql = require("better-sqlite3");
+const bcrypt = require("bcrypt");
+
 const db = sql("posts.db");
 
 const dummyPosts = [
@@ -52,6 +54,22 @@ const dummyPosts = [
   },
 ];
 
+const dummyUsers = [
+  {
+    email: "admin@example.com",
+    password: "admin123",
+    createdAt: "2024-01-01T00:00:00Z",
+    updatedAt: "2024-01-01T00:00:00Z",
+  },
+  {
+    email: "user@example.com",
+    password: "user123",
+    createdAt: "2024-01-01T00:00:00Z",
+    updatedAt: "2024-01-01T00:00:00Z",
+  },
+];
+
+// Create posts table
 db.prepare(
   `
   CREATE TABLE IF NOT EXISTS posts (
@@ -63,8 +81,22 @@ db.prepare(
 `
 ).run();
 
+// Create users table
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    createdAt DATETIME NOT NULL,
+    updatedAt DATETIME NOT NULL
+  )
+`
+).run();
+
 const initData = async () => {
-  const stmt = db.prepare(`
+  // Insert posts
+  const postStmt = db.prepare(`
       INSERT INTO posts
         (title, content, createdAt)
       VALUES (
@@ -75,8 +107,32 @@ const initData = async () => {
     `);
 
   for (const post of dummyPosts) {
-    stmt.run(post);
+    postStmt.run(post);
   }
+
+  // Insert users with hashed passwords
+  const userStmt = db.prepare(`
+      INSERT INTO users
+        (email, password, createdAt, updatedAt)
+      VALUES (
+        @email,
+        @password,
+        @createdAt,
+        @updatedAt
+      )
+    `);
+
+  for (const user of dummyUsers) {
+    const hashedPassword = await bcrypt.hash(user.password, 10);
+    userStmt.run({
+      email: user.email,
+      password: hashedPassword,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    });
+  }
+
+  console.log("Database initialized with posts and users data");
 };
 
 initData();

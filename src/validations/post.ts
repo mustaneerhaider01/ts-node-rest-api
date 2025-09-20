@@ -1,21 +1,25 @@
 import { Request, Response, NextFunction } from "express";
-import postValidationSchemas from "./schemas/post.js";
-import ApiError from "../lib/apiError.js";
+import Joi from "joi";
 
 const postValidators = {
-  validateCreatePost: (req: Request, _: Response, next: NextFunction) => {
-    const { error } = postValidationSchemas.validateCreatePost.validate(
-      req.body,
-      {
-        errors: { label: "key", wrap: { label: false } },
-      }
-    );
+  validateCreatePost: (req: Request, res: Response, next: NextFunction) => {
+    const schema = Joi.object({
+      title: Joi.string().required().label("Title"),
+      content: Joi.string().required().label("Content"),
+    });
+
+    const { error } = schema.validate(req.body, {
+      errors: { label: "key", wrap: { label: false } },
+    });
 
     if (error) {
-      throw new ApiError(400, error.details[0].message);
-    } else {
-      next();
+      return res.status(400).send({
+        status: 400,
+        success: false,
+        message: error.details[0].message,
+      });
     }
+    next();
   },
 };
 

@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from "express";
 
 import postRouter from "./routes/post.js";
+import authRouter from "./routes/auth.js";
 import ApiError from "./lib/apiError.js";
 
 const app = express();
@@ -19,6 +20,7 @@ app.get("/", (_, res) => {
 });
 
 app.use("/api/posts", postRouter);
+app.use("/api/auth", authRouter);
 
 app.use((err: ApiError, _: Request, res: Response, next: NextFunction) => {
   if (res.headersSent) {
@@ -28,7 +30,7 @@ app.use((err: ApiError, _: Request, res: Response, next: NextFunction) => {
   return res.status(err.status || 500).send({
     status: err.status || 500,
     success: false,
-    message: err.message,
+    message: err.message || "Something went wrong",
   });
 });
 
