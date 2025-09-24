@@ -95,6 +95,8 @@ db.prepare(
 ).run();
 
 const initData = async () => {
+  const redisService = (await import("./dist/lib/redis.js")).default;
+
   // Insert posts
   const postStmt = db.prepare(`
       INSERT INTO posts
@@ -107,7 +109,9 @@ const initData = async () => {
     `);
 
   for (const post of dummyPosts) {
-    postStmt.run(post);
+    const result = postStmt.run(post);
+    const postId = Number(result.lastInsertRowid);
+    redisService.addToSearchIndex(postId, post.title);
   }
 
   // Insert users with hashed passwords
@@ -133,6 +137,7 @@ const initData = async () => {
   }
 
   console.log("Database initialized with posts and users data");
+  process.exit(0);
 };
 
 initData();

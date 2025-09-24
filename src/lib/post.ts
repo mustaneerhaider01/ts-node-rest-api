@@ -8,6 +8,15 @@ export const getPosts = () => {
   return db.prepare("SELECT * FROM posts").all() as Post[];
 };
 
+export const getPostsByIds = (ids: number[]) => {
+  if (ids.length === 0) return [] as Post[];
+
+  const placeholders = ids.map(() => "?").join(", ");
+  const query = `SELECT * FROM posts WHERE id IN (${placeholders})`;
+
+  return db.prepare(query).all(...ids) as Post[];
+};
+
 export const getPost = (postId: number) => {
   const post = db.prepare("SELECT * FROM posts WHERE id = ?").get(postId);
 
@@ -37,7 +46,7 @@ export const savePost = (title: string, content: string) => {
 
   const result = stmt.run(postData);
 
-  return result.lastInsertRowid;
+  return Number(result.lastInsertRowid);
 };
 
 export const deletePost = (postId: number) => {

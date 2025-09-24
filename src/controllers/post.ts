@@ -5,6 +5,7 @@ import {
   savePost,
   deletePost,
   updatePost,
+  getPostsByIds,
 } from "../lib/post.js";
 import { Post } from "../types/post.js";
 import ApiError from "../lib/apiError.js";
@@ -73,10 +74,16 @@ const postController = {
     next: NextFunction
   ) => {
     try {
-      const createdPostId = savePost(req.body.title, req.body.content);
+      const { title, content } = req.body;
+
+      const createdPostId = savePost(title, content);
 
       // Invalidate cache after creating a new post
-      await redisService.invalidatePostCache();
+      // Enable searching for this post via title
+      await Promise.all([
+        redisService.invalidatePostCache(),
+        redisService.addToSearchIndex(createdPostId, title),
+      ]);
 
       res.send({
         status: 200,
@@ -98,14 +105,25 @@ const postController = {
   ) => {
     try {
       const postId = Number(req.params.postId);
-      const postIsDeleted = deletePost(postId);
 
-      if (!postIsDeleted) {
+      const post = getPost(postId);
+
+      if (!post) {
         throw new ApiError(404, "Post not found");
       }
 
+      const postIsDeleted = deletePost(postId);
+
+      if (!postIsDeleted) {
+        throw new ApiError(404, "Couldn't delete the post");
+      }
+
       // Invalidate cache after deleting a post
-      await redisService.invalidatePostCache(postId);
+      // Remove post title from search index
+      await Promise.all([
+        redisService.invalidatePostCache(postId),
+        redisService.removeFromSearchIndex(postId, post.title),
+      ]);
 
       res.send({
         status: 200,
@@ -124,14 +142,34 @@ const postController = {
   ) => {
     try {
       const postId = Number(req.params.postId);
-      const postIsEditied = updatePost(postId, req.body);
 
-      if (!postIsEditied) {
-        throw new ApiError(404, "Post not found");
-      }
+      // Use distributed locking to prevent concurrent updates
+      await redisService.withLock(
+        `post:update:${postId}`,
+        async () => {
+          const postIsEdited = updatePost(postId, req.body);
 
-      // Invalidate cache after editing a post
-      await redisService.invalidatePostCache(postId);
+          const post = getPost(postId);
+
+          if (!post) {
+            throw new ApiError(404, "Post not found");
+          }
+
+          if (!postIsEdited) {
+            throw new ApiError(404, "Couldn't update the post");
+          }
+
+          // Invalidate cache after editing a post
+          await redisService.invalidatePostCache(postId);
+
+          // Remove existing index for old title and add for new title
+          await redisService.removeFromSearchIndex(postId, post.title);
+          await redisService.addToSearchIndex(postId, req.body.title);
+        },
+        3000, // Lock for 3 seconds
+        100, // Retry every 100ms
+        3 // Max 3 retries
+      );
 
       res.send({
         status: 200,
@@ -140,6 +178,34 @@ const postController = {
       });
     } catch (err) {
       next(err);
+    }
+  },
+
+  search: async (
+    req: Request<{}, {}, {}, { search?: string }>,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const { search } = req.query;
+
+      if (!search) {
+        throw new ApiError(400, "Search query is missing");
+      }
+
+      const postIds = await redisService.searchPosts(search);
+      const posts = getPostsByIds(postIds);
+
+      res.send({
+        status: 200,
+        success: true,
+        message: "Posts fetched",
+        data: {
+          posts,
+        },
+      });
+    } catch (error) {
+      next(error);
     }
   },
 };

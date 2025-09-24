@@ -7,8 +7,9 @@ import { rateLimiter } from "../middleware/rateLimit.js";
 
 const router = Router();
 
-router.get("/list", authenticateToken, postController.list);
-router.get("/:postId", authenticateToken, postController.get);
+router.get("/list", postController.list);
+router.get("/search", postController.search);
+router.get("/:postId", postController.get);
 router.post(
   "/create",
   authenticateToken,

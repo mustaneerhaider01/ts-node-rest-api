@@ -166,6 +166,153 @@ class RedisService {
     }
   }
 
+  /**
+   * Acquire a distributed lock for a resource
+   * @param lockKey - Unique identifier for the resource
+   * @param lockDuration - Lock duration in milliseconds
+   * @returns Lock identifier if acquired, null if already locked
+   */
+  async acquireLock(
+    lockKey: string,
+    lockDuration = 3000
+  ): Promise<string | null> {
+    try {
+      const lockId = Math.random().toString(36).substring(7); // Unique lock identifier
+      const key = `lock:${lockKey}`;
+
+      // SET key value NX PX timeout - only set if not exists with expiration
+      const result = await this.client.set(key, lockId, {
+        condition: "NX",
+        expiration: {
+          type: "PX",
+          value: lockDuration, // Prevents deadlocks
+        },
+      });
+
+      return result === "OK" ? lockId : null;
+    } catch (error) {
+      console.error("Error acquiring lock:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Release a distributed lock
+   * @param lockKey - Unique identifier for the resource
+   * @param lockId - Lock identifier from acquireLock
+   */
+  async releaseLock(lockKey: string, lockId: string): Promise<boolean> {
+    try {
+      const key = `lock:${lockKey}`;
+
+      // Use Lua script for atomic check-and-delete
+      const luaScript = `
+        if redis.call("GET", KEYS[1]) == ARGV[1] then
+          return redis.call("DEL", KEYS[1])
+        else
+          return 0
+        end
+      `;
+
+      const result = await this.client.eval(luaScript, {
+        keys: [key],
+        arguments: [lockId],
+      });
+
+      return result === 1;
+    } catch (error) {
+      console.error("Error releasing lock:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Execute a function with distributed locking
+   * @param lockKey Unique identifier for the resource to lock
+   * @param operation The asynchronous function to execute while holding the lock
+   * @param lockDuration Lock duration in milliseconds before automatic expiration
+   * @param retryDelay Delay in milliseconds between lock acquisition retries
+   * @param maxRetries Maximum number of retry attempts before giving up
+   * @returns The result of the executed operation
+   * @throws {ApiError} 409 Conflict if the lock cannot be acquired after max retries
+   */
+  async withLock(
+    lockKey: string,
+    operation: () => Promise<any>,
+    lockDuration = 3000,
+    retryDelay = 100,
+    maxRetries = 3
+  ): Promise<any> {
+    let retries = 0;
+
+    while (retries <= maxRetries) {
+      const lockId = await this.acquireLock(lockKey, lockDuration);
+
+      if (lockId) {
+        try {
+          const result = await operation();
+          return result;
+        } finally {
+          await this.releaseLock(lockKey, lockId);
+        }
+      }
+
+      if (retries >= maxRetries) {
+        throw new ApiError(
+          409,
+          "Resource is currently being modified by another request"
+        );
+      }
+
+      // Wait before retrying
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      retries++;
+    }
+
+    throw new ApiError(409, "Failed to acquire lock after retries");
+  }
+
+  /**
+   * Add post title to search index
+   */
+  async addToSearchIndex(postId: number, title: string): Promise<void> {
+    try {
+      await this.client.sAdd("search:posts:titles", `${postId}:${title}`);
+    } catch (error) {
+      console.error("Error adding to search index:", error);
+    }
+  }
+
+  /**
+   * Remove post from search index
+   */
+  async removeFromSearchIndex(postId: number, title: string): Promise<void> {
+    try {
+      await this.client.sRem("search:posts:titles", `${postId}:${title}`);
+    } catch (error) {
+      console.error("Error removing from search index:", error);
+    }
+  }
+
+  /**
+   * Search posts by title keyword
+   */
+  async searchPosts(keyword: string): Promise<number[]> {
+    try {
+      const allTitles = await this.client.sMembers("search:posts:titles");
+
+      const matchingPosts = allTitles.filter((item) =>
+        item.toLowerCase().includes(keyword.toLowerCase())
+      );
+
+      // Extract post IDs from "id:title" format
+      return matchingPosts.map((item) => parseInt(item.split(":")[0]));
+    } catch (error) {
+      console.error("Error searching posts:", error);
+      return [];
+    }
+  }
+
   async isConnected(): Promise<boolean> {
     try {
       await this.client.ping();

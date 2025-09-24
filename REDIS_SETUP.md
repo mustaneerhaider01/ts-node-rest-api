@@ -22,6 +22,20 @@ This project now includes Redis caching for posts data and JWT session managemen
 - **Limit Enforcement**: Request count is incremented per API call and validated against a defined threshold (e.g., 100 requests per 15 minutes)
 - **Automatic Reset**: Keys expire after the specified time window (TTL), automatically resetting the request count
 
+### 4. Distributed Locking
+
+- **Resource Locking**: Prevents concurrent post modifications using Redis keys `lock:post:{postId}`
+- **Atomic Operations**: Uses Redis `SET` with `NX` and `PX` options for atomic lock acquisition
+- **Automatic Expiry**: Locks automatically expire after timeout (e.g., 3 seconds) to prevent deadlocks
+- **Conflict Handling**: Returns `409 Conflict` status when resources are already locked
+
+### 5. Quick Search Index
+
+- **Fast Post Search**: Maintain a Redis set of post titles for quick search functionality.
+- **Simple Pattern Matching**: Use Redis commands for basic search operations.
+- **Real-time Updates**: Keep the search index synchronized with post CRUD operations.
+- **Performance Boost**: Avoid expensive `SQL LIKE` queries on SQLite by leveraging Redis.
+
 ## Environment Variables Required
 
 Create a `.env` file with the following variables:
@@ -47,13 +61,17 @@ JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 - `GET /api/auth/profile` - Get user profile (requires authentication)
 - `POST /api/auth/refresh` - Refresh session (requires authentication)
 
-### Post Endpoints (with caching)
+### Endpoints (with caching)
 
 - `GET /api/posts/list` - Get all posts (cached)
 - `GET /api/posts/:postId` - Get single post (cached)
 - `POST /api/posts/create` - Create post (invalidates cache)
 - `PUT /api/posts/:postId/edit` - Edit post (invalidates cache)
 - `DELETE /api/posts/:postId/remove` - Delete post (invalidates cache)
+
+### Endpoints (without caching)
+
+- `Search /api/posts/search` - Search all posts (uncached)
 
 ## Usage Examples
 
@@ -71,13 +89,6 @@ curl -X POST http://localhost:3000/api/auth/register \
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "admin@example.com", "password": "admin123"}'
-```
-
-### Access Protected Endpoints
-
-```bash
-curl -X GET http://localhost:3000/api/posts/list \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
 ## Cache Strategy
