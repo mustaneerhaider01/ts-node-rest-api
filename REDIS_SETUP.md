@@ -1,6 +1,6 @@
 # Redis Implementation Guide
 
-This project now includes Redis caching for posts data and JWT session management.
+This project now includes Redis caching for posts data, JWT session management, rate limiting, distributed locking mechanism and full text search.
 
 ## Features Implemented
 
@@ -73,40 +73,7 @@ JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 
 - `Search /api/posts/search` - Search all posts (uncached)
 
-## Usage Examples
-
-### Register
-
-```bash
-curl -X POST http://localhost:3000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email": "newuser@example.com", "password": "password123"}'
-```
-
-### Login
-
-```bash
-curl -X POST http://localhost:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "admin@example.com", "password": "admin123"}'
-```
-
-## Cache Strategy
-
-1. **Read Operations**: Check cache first, fallback to database if cache miss
-2. **Write Operations**: Update database first, then invalidate relevant cache entries
-3. **Cache Keys**:
-   - `posts:all` - All posts list
-   - `posts:{id}` - Individual post
-   - `session:{userId}` - User session data
-
 ## Redis Setup
-
-### Using Docker
-
-```bash
-docker run -d --name redis -p 6379:6379 redis:latest
-```
 
 ### Using Homebrew (macOS)
 
@@ -115,18 +82,10 @@ brew install redis
 brew services start redis
 ```
 
-## Seeded Users
-
-The database is initialized with the following test users:
-
-- **Email**: `admin@example.com` | **Password**: `admin123`
-- **Email**: `user@example.com` | **Password**: `user123`
-
 ## Testing the Implementation
 
 1. Start Redis server
 2. Set environment variables
 3. Run the application: `npm run server`
-4. Test endpoints with the provided examples
 
 The caching will be transparent to the API consumers - responses will be faster on subsequent requests for the same data.
